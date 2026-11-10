@@ -9,6 +9,8 @@
 
 const BASE = (import.meta.env && import.meta.env.VITE_API_BASE) || '/api'
 const TOKEN_KEY = 'aurora_token'
+// 后端连不上时的统一文案：这个项目的报错基本都是「忘了开后端」，不是地址写错
+const OFFLINE_MSG = '连不上后端服务，请确认后端已在 8081 端口启动（双击 启动项目.bat）'
 
 // ---------- token 本地持久化 ----------
 export function saveToken (token) {
@@ -46,11 +48,18 @@ async function request (path, { method = 'GET', params = null, body = null } = {
     if (suffix) url += '?' + suffix
   }
 
-  const res = await fetch(url, {
-    method,
-    headers,
-    body: body == null ? undefined : JSON.stringify(body)
-  })
+  // 拿不到响应（后端进程没起 / 端口不通 / 断网）时 fetch 直接 reject，
+  // 原生报错是英文 "Failed to fetch"，对用户毫无意义 → 换成人话
+  let res
+  try {
+    res = await fetch(url, {
+      method,
+      headers,
+      body: body == null ? undefined : JSON.stringify(body)
+    })
+  } catch (_) {
+    throw new Error(OFFLINE_MSG)
+  }
 
   if (res.status === 401) {
     clearToken()
@@ -58,10 +67,15 @@ async function request (path, { method = 'GET', params = null, body = null } = {
   }
   if (!res.ok) {
     let message = '请求失败，请稍后再试'
+    let isJson = false
     try {
       const data = await res.json()
+      isJson = true
       if (data && data.message) message = data.message
     } catch (_) { /* 忽略解析错误 */ }
+    // 后端有 GlobalExceptionHandler，出错也一定回 JSON；
+    // 拿到非 JSON 的 5xx 说明请求根本没到后端（Vite 代理连不上 8081）
+    if (!isJson && res.status >= 500) message = OFFLINE_MSG
     throw new Error(message)
   }
   // 204 / 空响应体兜底

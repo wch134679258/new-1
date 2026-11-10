@@ -520,3 +520,99 @@ HomePage 自带 footer 与 SiteFooter 重复渲染。
 
 - `SiteNav` 在 ≤900px 直接 `display:none` 掉菜单，**移动端没有导航入口**（首页改版前就存在，本次未动）
 - 首页「更新节奏」热力图没做：缺按日期的发布/浏览量数据，需要后端补统计接口
+
+---
+
+## 十五、2026-11-10 启动体系重写（.bat 只做壳，逻辑全在 PowerShell）
+
+### 15.1 为什么要重写
+
+「双击 启动后端.bat 没反应 / 一闪就退，登录页注册登录进不去首页」的排查结论：
+**前端 5173 在跑，后端 8081 压根没启动**（`log/springboot-test.log` 无当日记录），
+Vite 代理连不上 8081 返回 `500 + text/plain`，前端只能显示「请求失败，请稍后再试」，
+看起来像地址写错，其实是后端没起来。
+
+旧 .bat 的问题在于：所有逻辑（编码、CRLF、`%~dp0` 尾反斜杠、`!VAR!` 延迟展开、
+`set /p` 截断、`start /d "%~dp0"` 引号转义）都写在批处理里，一旦出错窗口一闪就没了，
+且没有任何日志可查。
+
+### 15.2 新结构
+
+```
+ja5-main\
+├─ 启动后端.bat / 启动前端.bat / 启动项目.bat / 停止项目.bat   ← 纯 ASCII 三行壳，只负责调用 ps1
+├─ scripts\
+│   ├─ start-backend.ps1    后端：定位 java → 清端口 → 依赖 classpath → 按需增量编译 → java -cp 直启
+│   ├─ start-frontend.ps1   前端：定位 node → 清端口 → 缺依赖才 npm install → node vite.js
+│   ├─ start-all.ps1        一键：环境检查 → 清端口 → 库自检 → 各开一个窗口 → 健康检查 → 开浏览器
+│   └─ stop-all.ps1         按端口停 5173 / 8081（不按进程名杀，避免误杀）
+└─ logs\                     每次启动一份 backend-*.log / frontend-*.log / start-all-*.log
+```
+
+- `.bat` 内容固定为：`powershell -NoProfile -ExecutionPolicy Bypass -NoLogo -File "%~dp0scripts\xxx.ps1"`
+  **纯 ASCII + CRLF**，不写一个中文，从根上消灭编码坑
+- `.ps1` 统一 **UTF-8 带 BOM + CRLF**（PS 5.1 读无 BOM 的 UTF-8 中文会乱码，必须带 BOM）
+- 失败时窗口不关，会打出 `[错误] xxx`，并把全过程写进 `logs\`
+
+### 15.3 本机环境的新事实（2026-11-10 实测）
+
+| 项 | 值 |
+|---|---|
+| 项目路径 | `C:\Users\duan\Desktop\jage\ja5-main`（13.1 写的 `D:\workSpace\ja5` 已过期） |
+| JDK | **25.0.2**，真实路径 `D:\Program Files\Java\jdk-25.0.2`；另有 `C:\Program Files\Java\jdk-17` |
+| `JAVA_HOME` | **未设置** |
+| MySQL | **8.4**（`C:\Program Files\MySQL\MySQL Server 8.4\bin\mysql.exe`），root/123456 正常 |
+| Node | `E:\node\node.exe`（v22.23.4，系统 PATH） |
+
+**头号坑：PATH 里的 `java` 是 Oracle javapath 转发桩**
+`C:\Program Files\Common Files\Oracle\Java\javapath\java.exe` —— cmd 里能正常跑，
+但 **PowerShell 会把它当「文档」拒绝执行**，报 `CannotActivateDocumentInPipeline`。
+所以 `start-backend.ps1` 里显式跳过 javapath，改为扫 `C:\/D:\Program Files\Java` 下的
+真实 JDK 目录并按主版本号取最新（优先 JAVA_HOME）。
+
+### 15.4 其它修正
+
+- `恢复数据.bat` 里写死的 `MySQL Server 8.0` 路径 → 改成 `for /d` 通配匹配 `MySQL Server *`，
+  8.0/8.4/9.x 都能找到（这是「启动项目.bat 一进来就报库未就绪」的原因之一）
+- `启动项目.bat` 原来用 `start ... /d "%~dp0"`，`%~dp0` 结尾的反斜杠会和闭合引号粘连，
+  可能直接「系统找不到指定的路径」→ 新方案改为在 ps1 里 `Start-Process -WorkingDirectory`，无此问题
+
+### 15.5 AI 沙盒的限制（重要，别再试了）
+
+- **cmd.exe 被完全拦截**：Bash 调 `cmd.exe` 直接报「Invoking cmd.exe from Bash bypasses all command validation」；
+  PowerShell 工具调 `cmd /c` 报「cmd.exe cannot be used from the PowerShell tool」。所以 **.bat 无法在沙盒里验证**
+- **PowerShell 工具无法执行任何原生程序**：`& 'C:\Windows\System32\whoami.exe'` 静默零输出、
+  `$LASTEXITCODE` 为空（`java.exe`、`node.exe` 同理）。ps1 里的「启动进程」这一步只能由用户实测
+- 能在沙盒里做的：`[System.Management.Automation.Language.Parser]::ParseFile()` 语法校验（推荐每次都跑）
+- curl 打本地端口前必须去掉注入的代理：
+  `env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy curl ...`（否则得到假 502）
+- bash 里 `java ... &` 起的后端能活 1~5 分钟，之后被回收 → 只能用于冒烟，不能当常驻服务
+
+### 15.6 冒烟记录（2026-11-10）
+
+- 后端手工 `java -cp target/classes;target/classpath.txt` 起在 8081：登录 `verify用户/abc12345` 直连与经 5173 代理均 200
+- 用真实验证码走 `/api/auth/register`：新建 userId=3 → 立即登录成功（测试账号已从库中删除）
+- `mvnw.cmd -B -q -o -DskipTests compile`：BUILD SUCCESS（仅 JDK25 的 jansi/Unsafe 警告）
+- `npm run build`：71 modules 通过（本次改了 `src/api/http.js`）
+- 4 个 ps1：ParseFile 全部 OK，BOM 齐全；`.bat` 壳为纯 ASCII + CRLF
+
+### 15.7 前端错误提示改进
+
+`src/api/http.js` 新增 `OFFLINE_MSG`：fetch 直接 reject（后端没起）或拿到**非 JSON 的 5xx**
+（后端有 GlobalExceptionHandler，正常出错必回 JSON，所以非 JSON 5xx 必是代理连不上）时，
+提示「连不上后端服务，请确认后端已在 8081 端口启动（双击 启动项目.bat）」，
+不再让用户去猜「是不是地址错了」。
+
+### 15.8 二次修正：后台运行版（2026-11-10 18:06，以本节为准）
+
+- 前后端改为 `Start-Process` **后台独立运行**，不再依赖两个黑窗口保持打开；启动成功后关闭窗口不会停止服务
+- Java 禁用 devtools 自动重启（`-Dspring.devtools.restart.enabled=false`），避免开发期热重启造成状态误判
+- 运行输出分别写入 `logs/backend-runtime-*`、`logs/frontend-runtime-*`；PID 写入 `run/*.pid`（已 gitignore）
+- `启动项目.bat` 最后必须验证 **`http://127.0.0.1:5173/api/auth/captcha`**，即浏览器登录/注册真正走的链路，
+  而不是只检查 8081 端口；通过后才打开浏览器
+- Vite 代理目标固定为 **`http://127.0.0.1:8081`**，避免 Windows/Node 将 localhost 解析到 ::1 的兼容问题
+- 实测：`localhost` / `127.0.0.1` / `192.168.1.5` 的 5173 页面与验证码接口均 200；
+  `verify用户 / abc12345` 登录成功；真实验证码注册临时账号并立即登录成功（临时账号已删除）
+- 前端默认勾选「记住我」，`App.vue` 在挂载时若发现 `localStorage.aurora_token`，会调用 `/auth/me`
+  并直接进入首页。这是自动恢复登录，不是跳过认证；点导航栏「退出登录」或用无痕窗口即可看到登录/注册页。
+- 后台运行版只明确打印一个推荐地址 **`http://localhost:5173/`**，这是有意为之；本机使用不需要 Network 地址。

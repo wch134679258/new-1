@@ -5,9 +5,10 @@ target/
 # Vite 配置临时文件（ESM 配置加载时生成，重启会残留）
 vite.config.js.timestamp-*.mjs
 
-# 后端运行日志
+# 后端运行日志与后台进程 PID
 springBootTest/log/
 *.log
+run/
 
 # IDE
 .idea/

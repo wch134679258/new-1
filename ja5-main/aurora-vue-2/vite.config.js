@@ -12,7 +12,9 @@ export default defineConfig({
     // 相对路径，由下面的代理转发到 8081 后端，不依赖 CORS
     proxy: {
       '/api': {
-        target: 'http://localhost:8081',
+        // 固定 IPv4，避免部分 Windows/Node 环境把 localhost 解析到 ::1，
+        // 后端只监听 IPv4 时造成页面能开、登录/注册却 500。
+        target: 'http://127.0.0.1:8081',
         changeOrigin: true
       }
     }

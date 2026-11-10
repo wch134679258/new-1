@@ -12,14 +12,16 @@ echo ================================================
 echo.
 
 rem ---------- 定位 mysql 客户端 ----------
-set "MYSQL=C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe"
-if not exist "%MYSQL%" (
-  set "MYSQL="
+rem 不写死版本号：MySQL 8.0 / 8.4 / 9.x 都能找到（本机已升到 8.4）
+set "MYSQL="
+for /d %%D in ("C:\Program Files\MySQL\MySQL Server *") do if exist "%%~fD\bin\mysql.exe" set "MYSQL=%%~fD\bin\mysql.exe"
+if not defined MYSQL for /d %%D in ("D:\Program Files\MySQL\MySQL Server *") do if exist "%%~fD\bin\mysql.exe" set "MYSQL=%%~fD\bin\mysql.exe"
+if not defined MYSQL (
   where mysql >nul 2>nul && set "MYSQL=mysql"
 )
 if not defined MYSQL (
   echo [错误] 未找到 mysql 客户端，请确认 MySQL 已安装
-  echo        预期路径: C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe
+  echo        预期路径: C:\Program Files\MySQL\MySQL Server <版本>\bin\mysql.exe
   pause
   exit /b 1
 )
