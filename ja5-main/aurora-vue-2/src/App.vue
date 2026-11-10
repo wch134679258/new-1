@@ -1,7 +1,7 @@
 <template>
-  <SakuraBackground :night="night" />
+  <SakuraBackground v-if="view !== 'town'" :night="night" />
   <div class="grain"></div>
-  <PetalField :density="night ? 1 : 0.85" :opacity="night ? 1 : 0.88" />
+  <PetalField v-if="view !== 'town'" :density="night ? 1 : 0.85" :opacity="night ? 1 : 0.88" />
 
   <!-- 全局轻提示 -->
   <ToastHost />
@@ -32,7 +32,44 @@
     </p>
   </main>
 
-  <!-- ============ 登录后的页面 ============ -->
+  <!-- 后台管理登录页：仅登录，不提供注册入口 -->
+  <main v-else-if="view === 'admin-login'" class="stage">
+    <header class="stage__brand">
+      <span class="stage__mark"></span>
+      <span class="stage__name">樱见</span>
+      <span class="stage__en">SAKURA NOTE</span>
+    </header>
+
+    <section class="card" ref="card" @pointermove="onMove" @pointerleave="onLeave">
+      <div class="card__spin"></div>
+      <div class="card__fill"></div>
+      <div class="card__spot" ref="spot"></div>
+      <div class="card__inner">
+        <BrandPanel />
+        <AdminLoginPanel @success="onAdminSuccess" @back="goTown()" />
+      </div>
+    </section>
+
+    <p class="stage__foot">月色落在书页上 —— 静候每一位守站人。</p>
+  </main>
+
+  <!-- 后台管理主界面 -->
+  <AdminConsole
+    v-else-if="view === 'admin'"
+    :user="user"
+    @back="goTown()"
+    @logout="doLogout"
+  />
+
+  <!-- 新的默认首页：樱花小镇 -->
+  <SakuraTown
+    v-else-if="view === 'town'"
+    :user="user"
+    @navigate="onNavigate"
+    @logout="doLogout"
+  />
+
+  <!-- 原首页改为“手记馆”次页 -->
   <HomePage
     v-else-if="view === 'home'"
     :user="user"
@@ -96,6 +133,20 @@
     @logout="doLogout"
   />
 
+  <TetrisPage
+    v-else-if="view === 'tetris'"
+    :user="user"
+    @navigate="onNavigate"
+    @logout="doLogout"
+  />
+
+  <FishGamePage
+    v-else-if="view === 'fish'"
+    :user="user"
+    @navigate="onNavigate"
+    @logout="doLogout"
+  />
+
   <ProfilePage
     v-else-if="view === 'profile'"
     :user="user"
@@ -119,6 +170,8 @@ import SiteFooter from './components/SiteFooter.vue'
 import ProfilePage from './components/ProfilePage.vue'
 import BrandPanel from './components/BrandPanel.vue'
 import AuthPanel from './components/AuthPanel.vue'
+import AdminLoginPanel from './components/AdminLoginPanel.vue'
+import AdminConsole from './components/AdminConsole.vue'
 import SuccessOverlay from './components/SuccessOverlay.vue'
 import HomePage from './components/HomePage.vue'
 import ArticleDetail from './components/ArticleDetail.vue'
@@ -126,7 +179,11 @@ import FavoritesPage from './components/FavoritesPage.vue'
 import DiscoverPage from './components/DiscoverPage.vue'
 import AboutPage from './components/AboutPage.vue'
 import SpaceSnake from './components/SpaceSnake.vue'
+import TetrisPage from './components/TetrisPage.vue'
+import FishGamePage from './components/FishGamePage.vue'
+import SakuraTown from './components/SakuraTown.vue'
 import { useTilt } from './composables/useTilt'
+import { toast } from './composables/useToast'
 import { getMe, logout, getToken } from './api/auth'
 
 const { card, spot, onMove, onLeave } = useTilt()
@@ -138,22 +195,24 @@ const doneSub = ref('')
 
 /**
  * 视图状态机（无 vue-router）：
- *   auth 登录 / home 首页 / article 详情 / favorites 收藏
- *   discover 发现 / profile 我的 / about 关于 / game 小游戏
+ *   auth 登录 / admin-login 后台登录 / admin 管理台
+ *   town 樱花小镇（默认首页） / home 手记馆（原首页）
+ *   article 详情 / favorites 收藏 / discover 发现 / profile 我的 / about 关于
+ *   game 花瓣贪吃蛇 / tetris 樱落方块 / fish 樱海大鱼
  */
 const view = ref('auth')
 const user = ref(null)
 const articleId = ref(null)
 
-/** 登录页用夜色，保证表单可读性 */
-const night = computed(() => view.value === 'auth')
+/** 登录页与后台登录页用夜色，保证表单可读性 */
+const night = computed(() => view.value === 'auth' || view.value === 'admin-login')
 
-const showFooter = computed(() => view.value !== 'auth' && view.value !== 'game')
+const showFooter = computed(() => !['auth', 'admin-login', 'admin', 'town', 'game', 'tetris', 'fish'].includes(view.value))
 
 const homeFilter = ref(null)
 
 watch(view, (v) => {
-  document.body.classList.toggle('view-home', v !== 'auth')
+  document.body.classList.toggle('view-home', v !== 'auth' && v !== 'admin-login')
   window.scrollTo({ top: 0 })
 })
 
@@ -166,12 +225,18 @@ async function onSuccess (mode) {
   if (mode === 'signup' || mode === 'login') {
     try {
       user.value = await getMe()
-      goHome()
+      goTown()
       showDone.value = false
     } catch (e) {
       doneSub.value = (e && e.message) || '获取用户信息失败'
     }
   }
+}
+
+function onAdminSuccess (me) {
+  // 后台登录成功后进入管理台；后端已校验 permission=0
+  user.value = me
+  view.value = 'admin'
 }
 
 function onReset () {
@@ -193,12 +258,20 @@ function goAuth () {
 
 /* ---------- 页面导航 ---------- */
 function onNavigate (key) {
+  if (key === 'admin-login' && (!user.value || Number(user.value.permission) !== 0)) {
+    toast.info('仅管理员可访问后台管理系统')
+    return
+  }
   view.value = key
 }
 
 function openArticle (id) {
   articleId.value = id
   view.value = 'article'
+}
+
+function goTown () {
+  view.value = 'town'
 }
 
 function goHome (filter = null) {
@@ -218,7 +291,7 @@ onMounted(async () => {
   if (!getToken()) return
   try {
     user.value = await getMe()
-    view.value = 'home'
+    view.value = 'town'
   } catch (e) {
     user.value = null
     view.value = 'auth'

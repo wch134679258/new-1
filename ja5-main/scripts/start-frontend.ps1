@@ -43,8 +43,9 @@ foreach ($v in 'HTTP_PROXY','HTTPS_PROXY','http_proxy','https_proxy','NO_PROXY',
 }
 
 if (Test-Frontend) {
-    Say '  前端已经在运行：http://localhost:5173/' 'Green'
-    return
+    # 5173 可能仍是另一份 jage 的 Vite。不能只凭 HTTP 200 就复用，
+    # 否则从 D:\new-1 启动也会继续看到桌面旧项目。
+    Say '  检测到 5173 已有前端，正在重启为当前目录版本...' 'Yellow'
 }
 
 $node = $null

@@ -24,7 +24,8 @@ USE springboot_test;
 CREATE TABLE IF NOT EXISTS `user` (
   `id`         BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
   `name`       VARCHAR(64)  NOT NULL COMMENT '昵称（唯一登录名）',
-  `password`   VARCHAR(100) NOT NULL COMMENT 'BCrypt 加密后的密码',
+  `password`   VARCHAR(100) NOT NULL COMMENT 'BCrypt 加密后的密码（禁止明文）',
+  `permission` TINYINT      NOT NULL DEFAULT 1 COMMENT '权限：1=默认用户，0=管理员',
   `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '注册时间',
   `updated_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),

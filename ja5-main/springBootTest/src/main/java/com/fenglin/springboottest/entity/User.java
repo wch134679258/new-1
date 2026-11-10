@@ -21,6 +21,9 @@ public class User {
     /** BCrypt 加密后的密码 */
     private String password;
 
+    /** 权限：1=默认用户，0=管理员 */
+    private Integer permission;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -31,6 +34,7 @@ public class User {
     public User(String name, String password) {
         this.name = name;
         this.password = password;
+        this.permission = 1;
     }
 
     public Long getId() {
@@ -55,6 +59,14 @@ public class User {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    public Integer getPermission() {
+        return permission;
+    }
+
+    public void setPermission(Integer permission) {
+        this.permission = permission;
     }
 
     public LocalDateTime getCreatedAt() {

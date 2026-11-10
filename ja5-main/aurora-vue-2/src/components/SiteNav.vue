@@ -19,10 +19,10 @@
         </span>
       </a>
 
-      <!-- 导航菜单（≥900px 常驻） -->
+      <!-- 导航菜单（>1080px 常驻） -->
       <nav class="nav__menu">
         <button
-          v-for="item in menus"
+          v-for="item in visibleMenus"
           :key="item.key"
           class="nav__item"
           :class="{ on: active === item.key }"
@@ -56,7 +56,7 @@
           <span>离开</span>
         </button>
 
-        <!-- 汉堡按钮：<900px 才出现 -->
+        <!-- 汉堡按钮：≤1080px 出现 -->
         <button
           class="nav__burger"
           type="button"
@@ -96,7 +96,7 @@
 
           <nav class="md__list">
             <button
-              v-for="item in menus"
+              v-for="item in visibleMenus"
               :key="item.key"
               class="md__item"
               :class="{ on: active === item.key }"
@@ -133,18 +133,26 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 const props = defineProps({
   user: { type: Object, default: null },
   /** 当前高亮的菜单 key */
-  active: { type: String, default: 'home' }
+  active: { type: String, default: 'town' }
 })
 const emit = defineEmits(['go', 'logout'])
 
 const menus = [
-  { key: 'home', label: '首页' },
+  { key: 'town', label: '首页' },
+  { key: 'home', label: '手记馆' },
   { key: 'discover', label: '漫游' },
   { key: 'game', label: '小游戏' },
   { key: 'favorites', label: '书签' },
   { key: 'profile', label: '我的' },
-  { key: 'about', label: '关于' }
+  { key: 'about', label: '关于' },
+  { key: 'admin-login', label: '后台管理系统' }
 ]
+
+// 只有 permission=0 的管理员才显示后台入口
+const visibleMenus = computed(() => {
+  const isAdmin = Boolean(props.user) && Number(props.user.permission) === 0
+  return isAdmin ? menus : menus.filter((item) => item.key !== 'admin-login')
+})
 
 const userName = computed(() => (props.user && props.user.name) || '旅人')
 const userSub = computed(() => {
@@ -178,7 +186,7 @@ function pick (key) { close(); emit('go', key) }
 function onLogout () { close(); emit('logout') }
 
 function onKeydown (e) { if (e.key === 'Escape') close() }
-function onResize () { if (window.innerWidth > 900) close() }
+function onResize () { if (window.innerWidth > 1080) close() }
 
 watch(open, (v) => {
   if (v) {
@@ -548,7 +556,8 @@ onBeforeUnmount(() => {
 .md-enter-from, .md-leave-to { opacity: 0; }
 .md-enter-from .md__panel, .md-leave-to .md__panel { transform: translateX(100%); }
 
-@media (max-width: 900px) {
+/* 加入后台入口后，1080px 以下改用抽屉，避免菜单挤压或溢出 */
+@media (max-width: 1080px) {
   .nav { top: 10px; }
   .nav__menu { display: none; }
   .nav__logout { display: none; }

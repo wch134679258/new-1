@@ -45,7 +45,8 @@ defineProps({
 defineEmits(['go'])
 
 const links = [
-  { key: 'home', label: '首页' },
+  { key: 'town', label: '首页' },
+  { key: 'home', label: '手记馆' },
   { key: 'discover', label: '漫游' },
   { key: 'favorites', label: '书签' },
   { key: 'profile', label: '我的' },

@@ -9,6 +9,8 @@
         <p>在夜樱色的花田里追着飘落的花瓣跑 —— 撞上边栏或自己的尾巴，这一场春风就停了。</p>
       </header>
 
+      <GameSwitch active="game" @select="$emit('navigate', $event)" />
+
       <!-- ============ 游戏区 ============ -->
       <section class="stage">
         <div class="hud">
@@ -144,6 +146,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import SiteNav from './SiteNav.vue'
+import GameSwitch from './GameSwitch.vue'
 import { submitScore, fetchLeaderboard, fetchMyBest } from '../api/game'
 
 const props = defineProps({

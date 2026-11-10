@@ -46,6 +46,12 @@ public class GlobalExceptionHandler {
         return respond(HttpStatus.UNAUTHORIZED, e.getMessage());
     }
 
+    /** 已登录但没有管理员权限：403 */
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<Map<String, String>> handleForbidden(ForbiddenException e) {
+        return respond(HttpStatus.FORBIDDEN, e.getMessage());
+    }
+
     /** 请求体不是合法 JSON（比如前端传了字符串、或字段类型不匹配） */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, String>> handleNotReadable(HttpMessageNotReadableException e) {

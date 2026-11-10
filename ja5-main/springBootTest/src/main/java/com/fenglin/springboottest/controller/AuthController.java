@@ -23,9 +23,10 @@ import java.util.Map;
  * 认证接口：对接 aurora-vue-2 注册/登录页（昵称 + 密码）
  * <pre>
  * GET  /api/auth/captcha   -> { captchaId, image(base64 png) }
- * POST /api/auth/register  { name, password, captchaId, captcha } -> { token, userId }
- * POST /api/auth/login     { name, password, remember }           -> { token, userId }
- * GET  /api/auth/me        Authorization: Bearer &lt;token&gt;          -> { id, name }
+ * POST /api/auth/register  { name, password, captchaId, captcha } -> { token, userId, permission }
+ * POST /api/auth/login     { name, password, remember }           -> { token, userId, permission }
+ * GET  /api/auth/me        Authorization: Bearer &lt;token&gt;          -> { id, name, permission }
+ * POST /api/admin/login    { name, password, remember }           -> { token, userId, permission }（仅 permission=0）
  * </pre>
  */
 @RestController
@@ -53,13 +54,13 @@ public class AuthController {
 
     /** 注册：@Valid 先把明显不合法的入参拦成 400 {message} */
     @PostMapping("/register")
-    public Map<String, String> register(@Valid @RequestBody RegisterRequest req) {
+    public Map<String, Object> register(@Valid @RequestBody RegisterRequest req) {
         return authService.register(req);
     }
 
-    /** 登录 */
+    /** 普通登录 */
     @PostMapping("/login")
-    public Map<String, String> login(@Valid @RequestBody LoginRequest req) {
+    public Map<String, Object> login(@Valid @RequestBody LoginRequest req) {
         return authService.login(req);
     }
 
@@ -76,6 +77,7 @@ public class AuthController {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("id", user.getId());
         result.put("name", user.getName());
+        result.put("permission", user.getPermission() == null ? 1 : user.getPermission());
         return result;
     }
 }

@@ -86,3 +86,16 @@ export async function updateAdminTag (id, payload) {
 export async function deleteAdminTag (id) {
   return http.del('/admin/tags/' + encodeURIComponent(id))
 }
+
+// ---------- 用户权限 ----------
+
+/** 用户列表（不返回密码字段） */
+export async function fetchAdminUsers (opts = {}) {
+  const { page = 1, size = 10, keyword = '' } = opts
+  return http.get('/admin/users', { page, size, keyword })
+}
+
+/** 修改权限：0=管理员，1=默认用户 */
+export async function updateUserPermission (id, permission) {
+  return http.put('/admin/users/' + encodeURIComponent(id) + '/permission', { permission })
+}

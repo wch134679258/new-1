@@ -46,8 +46,8 @@ foreach ($v in 'HTTP_PROXY','HTTPS_PROXY','http_proxy','https_proxy','NO_PROXY',
 }
 
 if (Test-Backend) {
-    Say '  后端已经在运行，接口检查通过：http://localhost:8081/api/auth/captcha' 'Green'
-    return
+    # 与前端同理：不能因为 8081 健康就复用另一份项目的后端。
+    Say '  检测到 8081 已有后端，正在重启为当前目录版本...' 'Yellow'
 }
 
 # 优先使用真实 JDK，跳过 Oracle javapath 转发桩。

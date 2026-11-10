@@ -4,6 +4,7 @@ import com.fenglin.springboottest.dto.LoginRequest;
 import com.fenglin.springboottest.dto.RegisterRequest;
 import com.fenglin.springboottest.entity.User;
 import com.fenglin.springboottest.exception.BusinessException;
+import com.fenglin.springboottest.exception.ForbiddenException;
 import com.fenglin.springboottest.mapper.UserMapper;
 import com.fenglin.springboottest.config.JwtUtil;
 import org.springframework.dao.DuplicateKeyException;
@@ -44,6 +45,10 @@ public class AuthService {
     private static final int MAX_FAILS = 5;
     private static final long LOCK_MS = 60_000L;
 
+    /** 权限值：1=默认用户，0=管理员 */
+    private static final int PERMISSION_USER = 1;
+    private static final int PERMISSION_ADMIN = 0;
+
     private final UserMapper userMapper;
     private final JwtUtil jwtUtil;
     private final CaptchaService captchaService;
@@ -64,7 +69,7 @@ public class AuthService {
      * 注册：校验图形验证码 -> 校验昵称唯一 -> BCrypt 加密 -> 落库 -> 返回 JWT
      */
     @Transactional
-    public Map<String, String> register(RegisterRequest req) {
+    public Map<String, Object> register(RegisterRequest req) {
         String name = req.getName() == null ? "" : req.getName().trim();
         String password = req.getPassword() == null ? "" : req.getPassword();
 
@@ -88,6 +93,7 @@ public class AuthService {
         }
 
         User user = new User(name, encoder.encode(password));
+        user.setPermission(PERMISSION_USER);   // 注册用户一律是默认权限，不能自助成为管理员
         try {
             userMapper.insert(user);
         } catch (DuplicateKeyException e) {
@@ -95,14 +101,32 @@ public class AuthService {
             throw new BusinessException("该昵称已被使用，请换一个");
         }
 
-        return tokenResult(user.getId(), name);
+        return tokenResult(user.getId(), name, user.getPermission());
     }
 
     /**
-     * 登录：校验昵称 + 密码 -> 返回 JWT
+     * 普通登录：校验昵称 + 密码 -> 返回 JWT
      */
     @Transactional(readOnly = true)
-    public Map<String, String> login(LoginRequest req) {
+    public Map<String, Object> login(LoginRequest req) {
+        User user = authenticate(req);
+        return tokenResult(user.getId(), user.getName(), user.getPermission());
+    }
+
+    /**
+     * 后台登录：密码验证通过后还必须是管理员（permission=0）。
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> adminLogin(LoginRequest req) {
+        User user = authenticate(req);
+        if (!Integer.valueOf(PERMISSION_ADMIN).equals(user.getPermission())) {
+            throw new ForbiddenException("该账号没有后台管理权限");
+        }
+        return tokenResult(user.getId(), user.getName(), user.getPermission());
+    }
+
+    /** 公共账号密码校验与失败限流 */
+    private User authenticate(LoginRequest req) {
         String name = req.getName() == null ? "" : req.getName().trim();
         String password = req.getPassword() == null ? "" : req.getPassword();
 
@@ -123,7 +147,7 @@ public class AuthService {
         }
 
         fails.remove(name);
-        return tokenResult(user.getId(), name);
+        return user;
     }
 
     /** 该昵称还需锁定多少毫秒；0 表示未锁定 */
@@ -154,11 +178,12 @@ public class AuthService {
         });
     }
 
-    /** 签发 JWT 令牌并返回 userId */
-    private Map<String, String> tokenResult(Long userId, String name) {
-        Map<String, String> result = new HashMap<>();
+    /** 签发 JWT 令牌并返回 userId、permission */
+    private Map<String, Object> tokenResult(Long userId, String name, Integer permission) {
+        Map<String, Object> result = new HashMap<>();
         result.put("token", jwtUtil.createToken(userId, name));
         result.put("userId", String.valueOf(userId));
+        result.put("permission", permission == null ? PERMISSION_USER : permission);
         return result;
     }
 

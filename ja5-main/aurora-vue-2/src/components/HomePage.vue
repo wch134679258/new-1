@@ -118,6 +118,9 @@
         </article>
       </section>
 
+      <!-- 小说阅读导航：四部精选小说，外链集中在 config/novelLinks.js 配置 -->
+      <NovelNavigation />
+
       <!-- ============================================================
            吸顶筛选条：分类 / 排序 / 计数，滚到哪儿都能换条件
            ============================================================ -->
@@ -437,6 +440,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import SearchBar from './SearchBar.vue'
 import SiteNav from './SiteNav.vue'
 import PickCard from './PickCard.vue'
+import NovelNavigation from './NovelNavigation.vue'
 import ArticleRow from './ArticleRow.vue'
 import TagCloud from './TagCloud.vue'
 import { searchArticles, fetchCategories, fetchHotTags } from '../api/search'
