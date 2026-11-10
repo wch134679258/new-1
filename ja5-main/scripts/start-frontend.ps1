@@ -72,13 +72,46 @@ try {
 
 Set-Location $app
 $viteJs = Join-Path $app 'node_modules\vite\bin\vite.js'
-if (-not (Test-Path $viteJs)) {
-    Say '[3/3] 依赖缺失，正在 npm install...'
-    $g = Get-Command npm.cmd -ErrorAction SilentlyContinue
-    if (-not $g) { Fail '找不到 npm.cmd，请检查 Node.js 安装' }
-    & $g.Source install --prefer-offline --registry=https://registry.npmmirror.com --no-audit --no-fund --loglevel=error 2>&1 |
-        ForEach-Object { Write-Host "      $_" }
-    if (-not (Test-Path $viteJs)) { Fail 'npm install 失败，node_modules 中没有 Vite' }
+$runtimeCore = Join-Path $app 'node_modules\@vue\runtime-core\dist\runtime-core.esm-bundler.js'
+$compilerDom = Join-Path $app 'node_modules\@vue\compiler-dom\index.js'
+$rollupNative = Join-Path $app 'node_modules\@rollup\rollup-win32-x64-msvc\rollup.win32-x64-msvc.node'
+
+function Test-FrontendDeps {
+    return (Test-Path $viteJs) -and (Test-Path $runtimeCore) -and (Test-Path $compilerDom) -and (Test-Path $rollupNative)
+}
+
+if (-not (Test-FrontendDeps)) {
+    Say '[3/3] 前端依赖缺失或不完整，正在重新安装...'
+    $npm = Join-Path (Split-Path -Parent $node) 'npm.cmd'
+    if (-not (Test-Path $npm)) {
+        $g = Get-Command npm.cmd -ErrorAction SilentlyContinue
+        if ($g) { $npm = $g.Source }
+    }
+    if (-not $npm) { Fail '找不到 npm.cmd，请检查 Node.js 安装' }
+
+    # npm 默认缓存目录在部分机器上没有写权限，会导致包只解压出一半。
+    # 固定使用项目内缓存，并把完整输出写进日志，失败时能直接看到原因。
+    $npmCache = Join-Path $app '.npm-cache'
+    if (-not (Test-Path $npmCache)) { New-Item -ItemType Directory -Path $npmCache | Out-Null }
+    $npmLog = Join-Path $logDir ('npm-install-{0}.log' -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+
+    Say "      npm $npm"
+    Say "      缓存 $npmCache"
+    & $npm install --prefer-offline --cache $npmCache --registry=https://registry.npmmirror.com `
+        --no-audit --no-fund --loglevel=error 2>&1 |
+        Tee-Object -FilePath $npmLog | ForEach-Object { Write-Host "      $_" }
+
+    if (-not (Test-FrontendDeps)) {
+        Say '      首次安装不完整，正在联网强制补齐...' 'Yellow'
+        & $npm install --force --cache $npmCache --registry=https://registry.npmmirror.com `
+            --no-audit --no-fund --loglevel=error 2>&1 |
+            Tee-Object -FilePath $npmLog -Append | ForEach-Object { Write-Host "      $_" }
+    }
+
+    if (-not (Test-FrontendDeps)) {
+        Fail "前端依赖安装失败。请查看 $npmLog（通常是 npm 缓存损坏或网络问题）"
+    }
+    Say '      前端依赖安装完成'
 } else {
     Say '[3/3] 前端依赖已就绪'
 }

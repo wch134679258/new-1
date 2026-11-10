@@ -1,6 +1,8 @@
 # 依赖与构建产物
 node_modules/
+node_modules.*/
 target/
+.npm-cache*/
 
 # Vite 配置临时文件（ESM 配置加载时生成，重启会残留）
 vite.config.js.timestamp-*.mjs
